@@ -22267,10 +22267,16 @@ function connectWebSocket() {
     ws.onmessage = (event) => {
       try {
         const rawData = JSON.parse(event.data);
+        // LOG TEMPORAL — muestra los primeros 5 mensajes en pantalla
+        if (!window._snLogCount) window._snLogCount = 0;
+        if (window._snLogCount < 5) {
+          window._snLogCount++;
+          addAlert('📨 MSG ' + window._snLogCount + ': ' + JSON.stringify(rawData).substring(0, 120), 'info');
+        }
         handleWebSocketMessage(rawData);
       } catch (e) {
-        // Handle plain text or invalid JSON
         console.log('Raw message:', event.data);
+        addAlert('📨 RAW: ' + String(event.data).substring(0, 120), 'info');
       }
     };
 
