@@ -22261,27 +22261,13 @@ function connectWebSocket() {
         wsReconnectTimer = null;
       }
 
-      // Si es Spaceman, suscribirse al canal Pragmatic (igual que V1)
-      if (currentGame === 'spaceman') {
-        const subscribeMessage = {
-          "type": "subscribe",
-          "casinoId": SN_SPACEMAN_CONFIG.casinoId,
-          "currency": SN_SPACEMAN_CONFIG.currency,
-          "key": [SN_SPACEMAN_CONFIG.gameId]
-        };
-        ws.send(JSON.stringify(subscribeMessage));
-      }
+
     };
 
     ws.onmessage = (event) => {
       try {
         const rawData = JSON.parse(event.data);
-        // Spaceman usa conexión directa Pragmatic → manejador dedicado con dedup
-        if (currentGame === 'spaceman') {
-          handleSpacemanPragmaticMessage(rawData);
-        } else {
-          handleWebSocketMessage(rawData);
-        }
+        handleWebSocketMessage(rawData);
       } catch (e) {
         // Handle plain text or invalid JSON
         console.log('Raw message:', event.data);
