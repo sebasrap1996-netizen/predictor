@@ -6775,7 +6775,7 @@
           const calcularSenal = (historial, estrategia) => {
             if (!historial.length) return null;
             const hist = historial.filter(n => n !== 0);
-            if (hist.length < 5) return null;
+            if (hist.length < 3) return null;
 
             if (estrategia === 'plenos') {
               const sc = scoreBase(hist);
@@ -6786,7 +6786,7 @@
               if (candidatos.length < 3) return null;
               // Solo emitir señal si el top1 tiene score claramente superior al top4
               const top = candidatos.slice(0, 4);
-              if (sc[top[0]] < sc[top[3]] * 1.12) return null;
+              if (sc[top[0]] < sc[top[3]] * 1.05) return null;
               return top.slice(0, 3).join(',');
             }
 
@@ -6797,7 +6797,7 @@
               const sel = keys.reduce((a, b) => grupos[a] >= grupos[b] ? a : b);
               const total = keys.reduce((s, k) => s + grupos[k], 0);
               if (total === 0) return null;
-              if ((grupos[sel] / total) < 0.52) return null;
+              if ((grupos[sel] / total) < 0.50) return null;
               return sel;
             }
 
@@ -6808,7 +6808,7 @@
             const top2 = claves.slice(0, 2);
             const tercero = claves[2] ? grupos[claves[2]] : 0;
             const minTop2 = Math.min(grupos[top2[0]], grupos[top2[1]]);
-            if (minTop2 <= tercero * 1.08) return null;
+            if (minTop2 <= tercero * 1.01) return null;
             return top2.join('+');
           };
 
@@ -6816,13 +6816,13 @@
           const calcularSenalConUmbral = (historial, estrategia, umbral) => {
             if (!historial.length) return null;
             const hist = historial.filter(n => n !== 0);
-            if (hist.length < 5) return null;
+            if (hist.length < 3) return null;
             if (estrategia === 'plenos') {
               const sc = scoreBase(hist);
               const candidatos = Object.keys(sc).map(Number).filter(n => n >= 1 && n <= 36).sort((a, b) => sc[b] - sc[a]);
               if (candidatos.length < 3) return null;
               const top = candidatos.slice(0, 4);
-              const minRatio = umbral === 0.58 ? 1.18 : 1.12;
+              const minRatio = umbral === 0.58 ? 1.10 : 1.05;
               if (sc[top[0]] < sc[top[3]] * minRatio) return null;
               return top.slice(0, 3).join(',');
             }
@@ -6833,7 +6833,7 @@
               const sel = keys.reduce((a, b) => grupos[a] >= grupos[b] ? a : b);
               const total = keys.reduce((s, k) => s + grupos[k], 0);
               if (total === 0) return null;
-              if ((grupos[sel] / total) < umbral) return null;
+              if ((grupos[sel] / total) < (umbral - 0.02)) return null;
               return sel;
             }
             // docenas / columnas
@@ -6843,7 +6843,7 @@
             const top2 = claves.slice(0, 2);
             const tercero = claves[2] ? grupos[claves[2]] : 0;
             const minTop2 = Math.min(grupos[top2[0]], grupos[top2[1]]);
-            const ratio = umbral === 0.58 ? 1.15 : 1.08;
+            const ratio = umbral === 0.58 ? 1.05 : 1.01;
             if (minTop2 <= tercero * ratio) return null;
             return top2.join('+');
           };
@@ -6895,6 +6895,7 @@
           let emaColorMode = 'tendencia';
 
           function emaFeedOnly() {} // no-op, mantenido por compatibilidad
+          function resetEmaState() {} // no-op, mantenido por compatibilidad
 
           function applyEmaColorModeStyle(mode) {
             const btnT = document.getElementById('r-btn-tendencia');
