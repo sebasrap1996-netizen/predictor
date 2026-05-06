@@ -8897,8 +8897,8 @@
     const AVIATOR_CONFIG = {
       API_URL: buildAviatorApiUrl(AVIATOR_CASINOS['3'].roundsId),
       API_HEADERS: {},
-      POLL_INTERVAL: 3000,
-      RETRY_DELAY: 6000,
+      POLL_INTERVAL: 1500,
+      RETRY_DELAY: 4000,
       MAX_ERRORS: 5
     };
 
@@ -20841,8 +20841,6 @@ const tooltip = document.getElementById('tooltip');
 
 // ✅ FUNCIÓN OPTIMIZADA PARA AGREGAR VALORES
 function addValueManually(rangeKey, minValue, maxValue) {
-if (updatePending) return;
-updatePending = true;
 const timestamp = new Date();
 const randomValue = parseFloat((Math.random() * (maxValue - minValue) + minValue).toFixed(2));
 data.push({ timestamp: timestamp, value: randomValue, range: rangeKey });
@@ -20855,8 +20853,9 @@ evaluateAlertResult(randomValue);
 processNewValue(randomValue);
 addAlert(`Valor agregado: ${randomValue.toFixed(2)}x`, "success");
 updatePercentages();
-// ✅ OPTIMIZACIÓN: Usar requestAnimationFrame para dibujar
+// Redibujar inmediatamente
 if (drawRequest) cancelAnimationFrame(drawRequest);
+updatePending = false;
 drawRequest = requestAnimationFrame(() => { draw(); updatePending = false; });
 }
 
@@ -21940,8 +21939,8 @@ let aviatorSeenIds = new Set();
 const AVIATOR_CONFIG = {
   API_URL: buildAviatorApiUrl(AVIATOR_CASINOS['3'].roundsId),
   API_HEADERS: {},
-  POLL_INTERVAL: 3000,
-  RETRY_DELAY: 6000,
+  POLL_INTERVAL: 1500,
+  RETRY_DELAY: 4000,
   MAX_ERRORS: 5
 };
 let aviatorIsRunning = false;
@@ -22511,10 +22510,7 @@ function addValueFromServer(value, nivelServidor = null, silencioso = false) {
 
   const timestamp = new Date();
 
-  if (updatePending && !silencioso) return;
-  if (!silencioso) updatePending = true;
-
-  // Guardar nivel del servidor junto al dato
+  // Guardar nivel del servidor junto al dato — SIEMPRE, sin bloqueo por updatePending
   const entry = { timestamp, value, range: rangeKey, nivel: nivelServidor };
   data.push(entry);
   historyData.push(entry);
@@ -22533,7 +22529,9 @@ function addValueFromServer(value, nivelServidor = null, silencioso = false) {
     addAlert(`📡 ${value.toFixed(2)}x | Nivel: ${nivelServidor !== null ? (nivelServidor >= 0 ? '+' : '') + nivelServidor : '?'}`, 'success');
     updatePercentages();
 
+    // Redibujar inmediatamente — cancelar frame anterior y solicitar uno nuevo
     if (drawRequest) cancelAnimationFrame(drawRequest);
+    updatePending = false;
     drawRequest = requestAnimationFrame(() => { draw(); updatePending = false; });
   } else {
     updatePercentages();
