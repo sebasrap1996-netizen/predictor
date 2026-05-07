@@ -7005,6 +7005,7 @@
             const key = `${resultado}_${numero}_${state.galeActual}`;
             if (state.historialSenales.slice(-3).includes(key)) return;
             state.historialSenales.push(key);
+            if (state.historialSenales.length > 10) state.historialSenales.splice(0, state.historialSenales.length - 10);
             const ng = Math.max(0, state.galeActual);
             if (resultado === 'WIN') {
               state.resultadosGanados += 1; state.rachaActual += 1;
@@ -7075,6 +7076,10 @@
               const gid = j && j.gameId; if (!gid || state.juegosProcesados.has(gid)) continue;
               const n = parseInt(j.result, 10); if (Number.isNaN(n)) continue;
               state.juegosProcesados.add(gid); nuevos.push(n);
+              if (state.juegosProcesados.size > 500) {
+                const _arr = [...state.juegosProcesados];
+                state.juegosProcesados = new Set(_arr.slice(-300));
+              }
             }
             if (!nuevos.length) return;
             // Primera carga: poblar historial sin emitir señales del pasado,
@@ -8897,7 +8902,7 @@
     const AVIATOR_CONFIG = {
       API_URL: buildAviatorApiUrl(AVIATOR_CASINOS['3'].roundsId),
       API_HEADERS: {},
-      POLL_INTERVAL: 1500,
+      POLL_INTERVAL: 2000,
       RETRY_DELAY: 4000,
       MAX_ERRORS: 5
     };
@@ -9070,6 +9075,7 @@
           const id = String(_getAviatorRid(r));
           if (!id || aviatorSeenIds.has(id)) return false;
           aviatorSeenIds.add(id);
+          if (aviatorSeenIds.size > 200) { const _arr = [...aviatorSeenIds]; aviatorSeenIds = new Set(_arr.slice(-150)); }
           return true;
         });
 
@@ -10605,6 +10611,7 @@
           isManual: isManual,
           timestamp: Date.now()
         });
+        if (multiplierHistory.length > 500) multiplierHistory.splice(0, multiplierHistory.length - 500);
         updateHistoryDisplay();
       } else {
         // Ronda duplicada — ignorar completamente, no evaluar señal
@@ -10768,6 +10775,7 @@
       values.push(base + levelChange);
       labels.push(labels.length + 1);
       lastActions.push({ change: levelChange, label, multiplier: multiplier || null });
+      if (values.length > 500) { values.splice(0, values.length - 500); labels.splice(0, labels.length - 500); lastActions.splice(0, lastActions.length - 500); }
       updateAllCalculations();
     }
 
@@ -17788,7 +17796,16 @@
       return { macd: macdLine, signal: signalLine };
     };
 
+    let _rafPending = false;
     function updateAllCalculations() {
+      if (_rafPending) return;
+      _rafPending = true;
+      requestAnimationFrame(function() {
+        _rafPending = false;
+        _doUpdateAllCalculations();
+      });
+    }
+    function _doUpdateAllCalculations() {
       if (signalActive || secondBetAttempt) return;
       // Verificar zona bonus en cada ronda
       checkAndUpdateBonusZone();
@@ -17949,8 +17966,8 @@
 
       historyCount.textContent = `${len} ronda${len !== 1 ? 's' : ''}`;
 
-      // Iterate backwards without creating copies
-      const limit = 0;
+      // Render only last 50 items for performance
+      const limit = Math.max(0, len - 50);
       const parts = [];
       for (let i = len - 1; i >= limit; i--) {
         const item = multiplierHistory[i];
