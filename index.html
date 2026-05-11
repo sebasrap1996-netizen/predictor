@@ -7268,8 +7268,8 @@
               <div class="aviator-casino-selector" style="display:flex; gap:8px; align-items:center; justify-content:center; margin: 0 0 12px 0;">
                 <label for="aviator-casino" style="font-size:0.75rem; color: var(--text-secondary);">Casino</label>
                 <select id="aviator-casino" class="input" style="max-width: 240px; padding: 10px 12px;">
-                  <option value="3" selected>Rushbet / Betplay</option>
-                  <option value="4">1win</option>
+                  <option value="1" selected>Rushbet / Betplay</option>
+                  <option value="2">1win</option>
                 </select>
               </div>
               <div id="aviator-auto-pill" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;border-radius:12px;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.35);color:#ff8a95;font-size:0.82rem;font-weight:700;margin-bottom:12px;">
@@ -8818,15 +8818,14 @@
     }
     // ========== AVIATOR AUTO-CAPTURE (REST POLLING) ==========
     const AVIATOR_CASINOS = {
-      '3': { label: 'Rushbet / Betplay', roundsId: 7 },
-      '4': { label: '1win', roundsId: 6 },
-      '5': { label: 'Betano', roundsId: 8 }
+      '1': { label: 'Rushbet / Betplay', roundsId: 1 },
+      '2': { label: '1win', roundsId: 2 }
     };
 
     const AVIATOR_STORAGE_KEY = 'aviator_casino_id';
 
     function buildAviatorApiUrl(roundsId) {
-      return `https://ws-extractor-api.onrender.com/api/aviator/rounds/${roundsId}?limit=50`;
+      return `https://marvelous-trust-production.up.railway.app/api/aviator/rounds/${roundsId}?limit=50`;
     }
 
     // Extrae el multiplicador de una ronda cubriendo todos los campos posibles de Rushbet/Betplay y 1win
@@ -8900,7 +8899,7 @@
     let _aviatorApiLogged = false;
 
     const AVIATOR_CONFIG = {
-      API_URL: buildAviatorApiUrl(AVIATOR_CASINOS['3'].roundsId),
+      API_URL: buildAviatorApiUrl(AVIATOR_CASINOS['1'].roundsId),
       API_HEADERS: {},
       POLL_INTERVAL: 2000,
       RETRY_DELAY: 4000,
@@ -8916,8 +8915,8 @@
     let aviatorLastAppliedRoundId = null;
 
     function setAviatorCasino(casinoId) {
-      const normalized = String(casinoId || '3');
-      const cfg = AVIATOR_CASINOS[normalized] ? normalized : '3';
+      const normalized = String(casinoId || '1');
+      const cfg = AVIATOR_CASINOS[normalized] ? normalized : '1';
       AVIATOR_CONFIG.API_URL = buildAviatorApiUrl(AVIATOR_CASINOS[cfg].roundsId);
       try { localStorage.setItem(AVIATOR_STORAGE_KEY, cfg); } catch (_) {}
 
@@ -8945,13 +8944,13 @@
 
     const aviatorCasinoSelect = document.getElementById('aviator-casino');
     if (aviatorCasinoSelect) {
-      let initialCasinoId = '3';
+      let initialCasinoId = '1';
       try {
         const saved = localStorage.getItem(AVIATOR_STORAGE_KEY);
         if (saved) initialCasinoId = String(saved);
       } catch (_) {}
 
-      aviatorCasinoSelect.value = AVIATOR_CASINOS[initialCasinoId] ? initialCasinoId : '3';
+      aviatorCasinoSelect.value = AVIATOR_CASINOS[initialCasinoId] ? initialCasinoId : '1';
       setAviatorCasino(aviatorCasinoSelect.value);
       aviatorCasinoSelect.addEventListener('change', (e) => {
         // Limpiar señal activa al cambiar casino (otra frecuencia = señal inválida)
@@ -9214,6 +9213,7 @@
 
     const SPACEMAN_CONFIG = {
       wsUrl: 'wss://dga.pragmaticplaylive.net/ws',
+      railwayUrl: 'https://multipredictor-tatan-production.up.railway.app/spaceman/history',
       casinoId: 'ppcdk00000005349',
       currency: 'BRL',
       gameId: 1301
@@ -19792,8 +19792,8 @@
 <div id="aviatorCasinoBar" style="display:none;align-items:center;gap:8px;background:rgba(0,0,0,.35);padding:8px 12px;border-radius:10px;border:1px solid rgba(255,80,80,.15);margin-top:6px">
   <span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,120,120,.7);letter-spacing:1px;">✈️ CASINO:</span>
   <select id="aviatorCasinoSelect" style="background:rgba(0,0,0,.5);border:1px solid rgba(255,80,80,.25);color:#ff9090;border-radius:6px;padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;flex:1">
-    <option value="3">Rushbet / Betplay</option>
-    <option value="4">1win</option>
+    <option value="1">Rushbet / Betplay</option>
+    <option value="2">1win</option>
   </select>
 </div>
 </div>
@@ -21887,14 +21887,13 @@ let _snSpacemanLastAppliedAt = 0;
 // ✅ AVIATOR — REST POLLING (igual que PREDICTOR TATAN V3)
 // =====================================================
 const AVIATOR_CASINOS = {
-  '3': { label: 'Rushbet / Betplay', roundsId: 7 },
-  '4': { label: '1win', roundsId: 6 },
-  '5': { label: 'Betano', roundsId: 8 }
+  '1': { label: 'Rushbet / Betplay', roundsId: 1 },
+  '2': { label: '1win', roundsId: 2 }
 };
 const AVIATOR_STORAGE_KEY = 'aviator_casino_id_spaceman';
 
 function buildAviatorApiUrl(roundsId) {
-  return `https://ws-extractor-api.onrender.com/api/aviator/rounds/${roundsId}?limit=50`;
+  return `https://marvelous-trust-production.up.railway.app/api/aviator/rounds/${roundsId}?limit=50`;
 }
 
 function _getAviatorMult(r) {
@@ -21954,7 +21953,7 @@ async function _fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 
 let aviatorSeenIds = new Set();
 const AVIATOR_CONFIG = {
-  API_URL: buildAviatorApiUrl(AVIATOR_CASINOS['3'].roundsId),
+  API_URL: buildAviatorApiUrl(AVIATOR_CASINOS['1'].roundsId),
   API_HEADERS: {},
   POLL_INTERVAL: 1500,
   RETRY_DELAY: 4000,
@@ -21969,8 +21968,8 @@ let aviatorBootstrapped = false;
 let _aviatorApiLogged = false;
 
 function setAviatorCasino(casinoId) {
-  const normalized = String(casinoId || '3');
-  const cfg = AVIATOR_CASINOS[normalized] ? normalized : '3';
+  const normalized = String(casinoId || '1');
+  const cfg = AVIATOR_CASINOS[normalized] ? normalized : '1';
   AVIATOR_CONFIG.API_URL = buildAviatorApiUrl(AVIATOR_CASINOS[cfg].roundsId);
   try { localStorage.setItem(AVIATOR_STORAGE_KEY, cfg); } catch (_) {}
   aviatorBootstrapped = false;
