@@ -6973,7 +6973,7 @@
             const chips = ui.chips();
             if (chips) {
               chips.innerHTML = '';
-              const nums = state.historialResultados.slice(0, 14);
+              const nums = state.historialResultados.slice(0, 1000);
               if (!nums.length) {
                 const c = document.createElement('span'); c.className = 'rchip black'; c.textContent = '—'; chips.appendChild(c);
               } else {
@@ -7056,7 +7056,7 @@
               if (state.historialResultados[0] !== n)
                 state.historialResultados.unshift(n);
             }
-            state.historialResultados = state.historialResultados.slice(0, 20);
+            
             if (!state.analizar) { verificarResultado(state.historialResultados[0]); renderState(); return; }
             if (state.historialResultados.length < 5) { renderState(); return; }
             // Modo Tendencia: umbral más alto (señales más selectivas)
@@ -7086,7 +7086,7 @@
             // luego evaluar solo el numero mas reciente
             if (!state.historialResultados.length) {
               nuevos.slice().reverse().forEach(n => state.historialResultados.push(n));
-              state.historialResultados = state.historialResultados.slice(0, 20);
+              
               renderState();
               procesarNuevos([nuevos[nuevos.length - 1]]);
             } else {
@@ -8403,7 +8403,7 @@
         return;
       }
 
-      const ordered = source.slice(0, 50).slice().reverse(); // oldest -> newest
+      const ordered = source.slice(0, 1000).slice().reverse(); // oldest -> newest
 
       for (const m of ordered) {
         const mapped = mapMultiplierToRange(m);
@@ -8825,7 +8825,7 @@
     const AVIATOR_STORAGE_KEY = 'aviator_casino_id';
 
     function buildAviatorApiUrl(roundsId) {
-      return `https://marvelous-trust-production.up.railway.app/api/aviator/rounds/${roundsId}?limit=50`;
+      return `https://marvelous-trust-production.up.railway.app/api/aviator/rounds/${roundsId}?limit=1000`;
     }
 
     // Extrae el multiplicador de una ronda cubriendo todos los campos posibles de Rushbet/Betplay y 1win
@@ -9074,7 +9074,7 @@
           const id = String(_getAviatorRid(r));
           if (!id || aviatorSeenIds.has(id)) return false;
           aviatorSeenIds.add(id);
-          if (aviatorSeenIds.size > 200) { const _arr = [...aviatorSeenIds]; aviatorSeenIds = new Set(_arr.slice(-150)); }
+          if (aviatorSeenIds.size > 2000) { const _arr = [...aviatorSeenIds]; aviatorSeenIds = new Set(_arr.slice(-1500)); }
           return true;
         });
 
@@ -9095,13 +9095,13 @@
           else if (mult < 10.01) { change =  1; label = '5.01-10.00'; }
           else                   { change =  1; label = '10+'; }
 
-          // Registrar multiplicador para motor de estrategia (único lugar)
-          aviatorMultipliers.unshift(mult);
-          if (aviatorMultipliers.length > 50) aviatorMultipliers.pop();
           aviatorLastRoundId = rid;
           aviatorRoundCount++;
 
           if (selectedGame === 'aviator') {
+            // Registrar multiplicador para motor de estrategia (único lugar)
+            aviatorMultipliers.unshift(mult);
+            if (aviatorMultipliers.length > 2000) aviatorMultipliers.length = 1500;
             lastCapturedLabel = `${mult.toFixed(2)}x [${label}]`;
 
             // Registrar datos UNA SOLA VEZ vía processInput (sin dedup por valor)
@@ -9147,9 +9147,16 @@
 
     document.addEventListener('visibilitychange', function() {
       if (document.visibilityState === 'visible') {
+        // Reactivar polling si fue throttled/pausado por el browser en segundo plano
         if (aviatorIsRunning && !aviatorPollTimer) {
           aviatorPollLoop();
         }
+        // Reactivar WebSocket de Spaceman si se cerró mientras estaba en fondo
+        try {
+          if (spacemanIsConnected === false && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED)) {
+            connectToSpaceman();
+          }
+        } catch(_) {}
       }
     });
 
@@ -9326,7 +9333,7 @@
                   // gameResult viene newest-first → invertir para tener oldest-first antes de slice
                   // last20Results ya viene oldest-first → usar directo
                   const ordered = snapshotNewestFirst ? mults.slice().reverse() : mults;
-                  seedMultipliers(ordered.slice(-50), 'spaceman');
+                  seedMultipliers(ordered, 'spaceman');
                   spacemanLastMultiplier = snapshotNewestFirst ? mults[0] : mults[mults.length - 1];
                   spacemanBootstrapped = true;
                   spacemanLastAppliedAt = nowTs;
@@ -9372,10 +9379,10 @@
               if (_spacemanProcessedRounds.has(eventKey)) return; // ya procesado
               _spacemanProcessedRounds.add(eventKey);
               // Limpiar Set si crece demasiado (mantener últimas 100 rondas)
-              if (_spacemanProcessedRounds.size > 100) {
+              if (_spacemanProcessedRounds.size > 2000) {
                 const arr = [..._spacemanProcessedRounds];
                 _spacemanProcessedRounds.clear();
-                arr.slice(-80).forEach(k => _spacemanProcessedRounds.add(k));
+                arr.slice(-1500).forEach(k => _spacemanProcessedRounds.add(k));
               }
             } else {
               // Sin roundId: dedup por valor + ventana de 60s
@@ -9396,12 +9403,12 @@
             else if (multiplier <= 10.00){ change =  1; label = '5.01-10.00';}
             else                         { change =  1; label = '10+'; }
 
-            spacemanMultipliers.unshift(multiplier);
-            if (spacemanMultipliers.length > 50) spacemanMultipliers.pop();
-
             // ── 6. LÓGICA DE SEÑAL — TatanStrategyEngine ──
             window._crashServerTs = eventKey || (multiplier.toFixed(2) + '_' + Math.floor(nowTs / 5000));
             if (selectedGame === 'spaceman') {
+              // Registrar multiplicador para motor de estrategia (único lugar)
+              spacemanMultipliers.unshift(multiplier);
+              if (spacemanMultipliers.length > 2000) spacemanMultipliers.length = 1500;
               // Registrar datos UNA SOLA VEZ vía processInput (sin dedup por valor)
               window._aviatorRoundIdDedup = true;
               processInput(change, label, multiplier, true);
@@ -9948,7 +9955,7 @@
       entry.innerHTML = `<span style="font-size:1rem;">${icon}</span><span style="color:${color};font-weight:700;min-width:42px;">${label}</span><span style="color:#aaa;flex:1;">${detail || ''}</span><span style="color:#555;font-size:0.7rem;white-space:nowrap;">${time}</span>`;
       list.insertBefore(entry, list.firstChild);
       // Limitar a 50 entradas
-      while (list.children.length > 50) list.removeChild(list.lastChild);
+      
     }
     function clearLiveLog() {
       const list = document.getElementById('live-log-list');
@@ -10578,10 +10585,10 @@
       if (multiplier && multiplier >= 1 && !isRealtime) {
         if (selectedGame === 'aviator') {
           aviatorMultipliers.unshift(multiplier);
-          if (aviatorMultipliers.length > 50) aviatorMultipliers.pop();
+          
         } else if (selectedGame === 'spaceman') {
           spacemanMultipliers.unshift(multiplier);
-          if (spacemanMultipliers.length > 50) spacemanMultipliers.pop();
+          
         }
       }
 
@@ -10595,10 +10602,10 @@
           _skipWrite = true;
         } else {
           window._writtenCrashTimestamps.add(_serverTs);
-          if (window._writtenCrashTimestamps.size > 300) {
+          if (window._writtenCrashTimestamps.size > 2000) {
             const _a = [...window._writtenCrashTimestamps];
             window._writtenCrashTimestamps.clear();
-            _a.slice(-200).forEach(k => window._writtenCrashTimestamps.add(k));
+            _a.slice(-1500).forEach(k => window._writtenCrashTimestamps.add(k));
           }
         }
       }
@@ -10611,7 +10618,7 @@
           isManual: isManual,
           timestamp: Date.now()
         });
-        if (multiplierHistory.length > 500) multiplierHistory.splice(0, multiplierHistory.length - 500);
+        
         updateHistoryDisplay();
       } else {
         // Ronda duplicada — ignorar completamente, no evaluar señal
@@ -10775,7 +10782,7 @@
       values.push(base + levelChange);
       labels.push(labels.length + 1);
       lastActions.push({ change: levelChange, label, multiplier: multiplier || null });
-      if (values.length > 500) { values.splice(0, values.length - 500); labels.splice(0, labels.length - 500); lastActions.splice(0, lastActions.length - 500); }
+      
       updateAllCalculations();
     }
 
@@ -10812,10 +10819,10 @@
 
         if (gameName === 'spaceman') {
           spacemanMultipliers.unshift(m);
-          if (spacemanMultipliers.length > 50) spacemanMultipliers.pop();
+          
         } else if (gameName === 'aviator') {
           aviatorMultipliers.unshift(m);
-          if (aviatorMultipliers.length > 50) aviatorMultipliers.pop();
+          
         }
       }
 
@@ -17966,8 +17973,8 @@
 
       historyCount.textContent = `${len} ronda${len !== 1 ? 's' : ''}`;
 
-      // Render only last 50 items for performance
-      const limit = Math.max(0, len - 50);
+      // Render up to last 1000 items
+      const limit = Math.max(0, len - 1000);
       const parts = [];
       for (let i = len - 1; i >= limit; i--) {
         const item = multiplierHistory[i];
@@ -20856,13 +20863,52 @@ const canvas = document.getElementById('chart'); const ctx = canvas.getContext('
 const imiCanvas = document.getElementById('imiChart'); const imiCtx = imiCanvas.getContext('2d');
 const tooltip = document.getElementById('tooltip');
 
+// ── V2 VIEWPORT: pan izquierda/derecha ──
+const V2_VISIBLE = 80;
+let v2ViewOffset = 0;
+let v2AutoFollow = true;
+let v2IsPanning = false;
+let v2PanStartX = 0, v2PanStartOffset = 0;
+function v2GetViewData() {
+  if (data.length <= V2_VISIBLE) { v2ViewOffset = 0; return data; }
+  if (v2AutoFollow) v2ViewOffset = data.length - V2_VISIBLE;
+  v2ViewOffset = Math.max(0, Math.min(v2ViewOffset, data.length - V2_VISIBLE));
+  return data.slice(v2ViewOffset, v2ViewOffset + V2_VISIBLE);
+}
+setTimeout(function() {
+  canvas.addEventListener('mousedown', function(e) { v2IsPanning = true; v2PanStartX = e.clientX; v2PanStartOffset = v2ViewOffset; v2AutoFollow = false; });
+  canvas.addEventListener('mousemove', function(e) {
+    if (!v2IsPanning) return;
+    const cW = canvas.getBoundingClientRect().width || canvas.width / 2;
+    v2ViewOffset = Math.round(v2PanStartOffset - (e.clientX - v2PanStartX) * (V2_VISIBLE / cW));
+    v2ViewOffset = Math.max(0, Math.min(v2ViewOffset, Math.max(0, data.length - V2_VISIBLE)));
+    if (v2ViewOffset >= data.length - V2_VISIBLE) v2AutoFollow = true;
+    if (drawRequest) cancelAnimationFrame(drawRequest);
+    drawRequest = requestAnimationFrame(() => { draw(); });
+  });
+  canvas.addEventListener('mouseup', function() { v2IsPanning = false; });
+  canvas.addEventListener('mouseleave', function() { v2IsPanning = false; });
+  let v2TouchStartX = 0, v2TouchOffset = 0;
+  canvas.addEventListener('touchstart', function(e) { if (e.touches.length !== 1) return; v2IsPanning = true; v2TouchStartX = e.touches[0].clientX; v2TouchOffset = v2ViewOffset; v2AutoFollow = false; }, { passive: true });
+  canvas.addEventListener('touchmove', function(e) {
+    if (!v2IsPanning || e.touches.length !== 1) return;
+    const cW = canvas.getBoundingClientRect().width || canvas.width / 2;
+    v2ViewOffset = Math.round(v2TouchOffset - (e.touches[0].clientX - v2TouchStartX) * (V2_VISIBLE / cW));
+    v2ViewOffset = Math.max(0, Math.min(v2ViewOffset, Math.max(0, data.length - V2_VISIBLE)));
+    if (v2ViewOffset >= data.length - V2_VISIBLE) v2AutoFollow = true;
+    if (drawRequest) cancelAnimationFrame(drawRequest);
+    drawRequest = requestAnimationFrame(() => { draw(); });
+  }, { passive: true });
+  canvas.addEventListener('touchend', function() { v2IsPanning = false; });
+}, 500);
+
 // ✅ FUNCIÓN OPTIMIZADA PARA AGREGAR VALORES
 function addValueManually(rangeKey, minValue, maxValue) {
 const timestamp = new Date();
 const randomValue = parseFloat((Math.random() * (maxValue - minValue) + minValue).toFixed(2));
 data.push({ timestamp: timestamp, value: randomValue, range: rangeKey });
 historyData.push({ timestamp: timestamp, value: randomValue, range: rangeKey });
-if (historyData.length > 600) historyData.shift();
+
 document.getElementById('valuesCount').textContent = `Valores: ${data.length}`;
 document.getElementById('totalValues').textContent = data.length;
 document.getElementById('currentTime').textContent = timestamp.toLocaleTimeString();
@@ -21461,17 +21507,18 @@ function draw() {
 const width = canvas.width; const height = canvas.height; const padding = 40;
 ctx.clearRect(0, 0, width, height);
 if (data.length === 0) { ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; ctx.font = '24px Arial'; ctx.textAlign = 'center'; ctx.fillText('👆 Presiona un botón para agregar valores', width / 2, height / 2); return; }
-const values = data.map(d => d.value);
+const viewData = v2GetViewData();
+const values = viewData.map(d => d.value);
 let min = Math.min(...values) * 0.995; let max = Math.max(...values) * 1.005;
-if (chartType === 'candles') { drawCandles(ctx, data, padding, width, height); }
-else if (chartType === 'moderate') { drawModerate(ctx, data, padding, width, height); }
-else { drawTrend(ctx, data, padding, width, height, min, max); }
-calculateIMI(data);
+if (chartType === 'candles') { drawCandles(ctx, viewData, padding, width, height); }
+else if (chartType === 'moderate') { drawModerate(ctx, viewData, padding, width, height); }
+else { drawTrend(ctx, viewData, padding, width, height, min, max); }
+calculateIMI(viewData);
 const imiWidth = imiCanvas.width; const imiHeight = imiCanvas.height;
 imiCtx.clearRect(0, 0, imiWidth, imiHeight);
 drawIMI(imiCtx, padding, imiWidth, imiHeight);
-if (data.length > 0) {
-const last = data[data.length - 1]; const color = rangeColors[last.range] || rangeColors['2.00-2.99'];
+if (viewData.length > 0) {
+const last = viewData[viewData.length - 1]; const color = rangeColors[last.range] || rangeColors['2.00-2.99'];
 ctx.fillStyle = color.fill; ctx.font = 'bold 26px Arial'; ctx.textAlign = 'right';
 ctx.fillText(`${last.value.toFixed(2)}x`, width - padding, padding - 10);
 }
@@ -21524,6 +21571,7 @@ btn.addEventListener('click', () => {
 document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
 btn.classList.add('active'); const range = parseInt(btn.dataset.range);
 if (historyData.length > range) { data = historyData.slice(-range); } else { data = [...historyData]; }
+v2AutoFollow = true; v2ViewOffset = 0;
 document.getElementById('valuesCount').textContent = `Valores: ${data.length}`; draw();
 });
 });
@@ -21893,7 +21941,7 @@ const AVIATOR_CASINOS = {
 const AVIATOR_STORAGE_KEY = 'aviator_casino_id_spaceman';
 
 function buildAviatorApiUrl(roundsId) {
-  return `https://marvelous-trust-production.up.railway.app/api/aviator/rounds/${roundsId}?limit=50`;
+  return `https://marvelous-trust-production.up.railway.app/api/aviator/rounds/${roundsId}?limit=1000`;
 }
 
 function _getAviatorMult(r) {
@@ -22112,10 +22160,12 @@ window.addEventListener('load', () => {
 function selectGame(game) {
   if (currentGame === game) return;
 
-  // Disconnect current connections
-  disconnectWebSocket();
-  // No detener Aviator poll al cambiar juego — sigue en background
-  // Solo detenerlo si ya no es necesario (se maneja en selectMode)
+  // Solo desconectar WS si el nuevo juego también usa WebSocket.
+  // Si el destino es Aviator (REST), el WS de Spaceman/Slide queda vivo en background.
+  if (game !== 'aviator') {
+    disconnectWebSocket();
+  }
+  // Aviator sigue en background sin interrupciones
 
   // Update UI
   document.querySelectorAll('.game-btn').forEach(btn => {
@@ -22197,7 +22247,7 @@ function selectMode(mode) {
   } else {
     cleanAllData();
     disconnectWebSocket();
-    stopAviatorCapture();
+    // Aviator sigue capturando en background aunque el modo sea manual
     updateConnectionStatus('disconnected');
   }
 
@@ -22326,7 +22376,7 @@ function handleSpacemanPragmaticMessage(data) {
         const mults = snapshot.map(v => parseFloat(v)).filter(v => !isNaN(v) && v >= 1);
         if (mults.length) {
           const ordered = snapshotNewestFirst ? mults.slice().reverse() : mults;
-          const toSeed = ordered.slice(-50);
+          const toSeed = ordered;
           // Seed silencioso
           toSeed.forEach(mult => addValueFromServer(mult, null, true));
           if (drawRequest) cancelAnimationFrame(drawRequest);
@@ -22531,7 +22581,7 @@ function addValueFromServer(value, nivelServidor = null, silencioso = false) {
   data.push(entry);
   historyData.push(entry);
 
-  if (historyData.length > 600) historyData.shift();
+  
 
   // Actualizar contador de valores
   const countSpan = document.getElementById('valuesCount');
@@ -24019,7 +24069,7 @@ window.updateNivelTable = updateNivelTable;
 	processNumber(number) {
 		const real = REAL_COLOR_MAP[number] || "VERDE";
 		this.spinHistory.push({ number, real });
-		if (this.spinHistory.length > 300) this.spinHistory.shift();
+		
 
 		let lastOrig = this.originalLevels.length ? this.originalLevels[this.originalLevels.length-1] : 0;
 		let lastInv  = this.invertedLevels.length  ? this.invertedLevels[this.invertedLevels.length-1]  : 0;
@@ -25272,5 +25322,121 @@ window.updateNivelTable = updateNivelTable;
 
     window.quickResult = function(win) { window._routletteManualResolve(win); };
     </script>
+
+<!-- ===== 24/7 BACKGROUND KEEPALIVE — PREDICTOR TATAN ===== -->
+<script>
+(function initBackground24x7() {
+  'use strict';
+
+  // ── FUNCIÓN CENTRAL DE HEARTBEAT ─────────────────────────
+  function onTick() {
+    try {
+      if (typeof aviatorIsRunning !== 'undefined' && aviatorIsRunning &&
+          (typeof aviatorPollTimer === 'undefined' || !aviatorPollTimer)) {
+        if (typeof aviatorPollLoop === 'function') aviatorPollLoop();
+      }
+    } catch(_) {}
+    try {
+      if (typeof ws !== 'undefined' && ws !== null &&
+          ws.readyState === WebSocket.CLOSED &&
+          typeof currentMode !== 'undefined' && currentMode === 'auto' &&
+          (typeof wsReconnectTimer === 'undefined' || !wsReconnectTimer)) {
+        if (typeof connectWebSocket === 'function') connectWebSocket();
+      }
+    } catch(_) {}
+    try {
+      if (typeof spacemanIsConnected !== 'undefined' && !spacemanIsConnected &&
+          typeof spacemanSocket !== 'undefined' &&
+          (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED)) {
+        if (typeof connectToSpaceman === 'function') connectToSpaceman();
+      }
+    } catch(_) {}
+  }
+
+  // ── 1. TIMER: IFRAME srcdoc (no requiere blob: URLs) ─────
+  var iframeOk = false;
+  try {
+    var ifr = document.createElement('iframe');
+    ifr.style.cssText = 'position:absolute;width:0;height:0;border:0;top:-9999px;left:-9999px;visibility:hidden;pointer-events:none;';
+    ifr.srcdoc = '<!DOCTYPE html><html><body><script>setInterval(function(){try{parent.postMessage("__bg24x7__","*");}catch(e){}},1000);<\/script></body></html>';
+    document.body.appendChild(ifr);
+    window.addEventListener('message', function(e) {
+      if (e.data === '__bg24x7__') onTick();
+    });
+    iframeOk = true;
+  } catch(_) { iframeOk = false; }
+
+  // ── 2. FALLBACK: Blob Worker ──────────────────────────────
+  if (!iframeOk) {
+    try {
+      var wBlob = new Blob(['setInterval(function(){postMessage(1);},1000);'], { type: 'application/javascript' });
+      var wObj  = new Worker(URL.createObjectURL(wBlob));
+      wObj.onmessage = onTick;
+    } catch(_) {
+      // ── 3. FALLBACK FINAL: setInterval directo ────────────
+      setInterval(onTick, 1500);
+    }
+  }
+
+  // ── 2. WAKE LOCK API ─────────────────────────────────────
+  var wakeLock = null;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', function() { wakeLock = null; });
+    } catch(_) {}
+  }
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !wakeLock) requestWakeLock();
+  });
+  requestWakeLock();
+
+  // ── 3. SILENT AUDIO LOOP ─────────────────────────────────
+  // Con audio activo Chrome NO aplica throttling agresivo de 1 minuto.
+  var audioCtx = null;
+  function startSilentAudio() {
+    if (audioCtx) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+      var buf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.5), audioCtx.sampleRate);
+      function scheduleNext() {
+        var src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        var gain = audioCtx.createGain();
+        gain.gain.value = 0.0001;
+        src.connect(gain);
+        gain.connect(audioCtx.destination);
+        src.onended = function() { setTimeout(scheduleNext, 25000); };
+        src.start();
+      }
+      scheduleNext();
+    } catch(_) {}
+  }
+  document.addEventListener('click',      startSilentAudio, { once: true, capture: true });
+  document.addEventListener('touchstart', startSilentAudio, { once: true, capture: true });
+
+  // ── 4. VISIBILITYCHANGE — REANUDAR AL VOLVER ─────────────
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      if (typeof aviatorIsRunning !== 'undefined' && aviatorIsRunning && !aviatorPollTimer) {
+        if (typeof aviatorPollLoop === 'function') aviatorPollLoop();
+      }
+    } catch(_) {}
+    try {
+      if (typeof currentMode !== 'undefined' && currentMode === 'auto' &&
+          typeof ws !== 'undefined' && ws !== null &&
+          ws.readyState === WebSocket.CLOSED && !wsReconnectTimer) {
+        if (typeof connectWebSocket === 'function') connectWebSocket();
+      }
+    } catch(_) {}
+    try {
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    } catch(_) {}
+  });
+
+})();
+</script>
 
 </body>
