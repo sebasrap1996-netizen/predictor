@@ -9215,8 +9215,23 @@
     let spacemanBootstrapped = false;
     let spacemanLastAppliedKey = null;
     let spacemanLastAppliedAt = 0;
-    // Set persistente de roundIds — NO expira, evita duplicados en rondas largas
-    const _spacemanProcessedRounds = new Set();
+    // Backoff exponencial para reconexion V1
+    let _spacemanReconnectAttempt = 0;
+    let _spacemanReconnectTimer = null;
+    const _SPACEMAN_MAX_RECONNECT = 5;
+    // Set persistente de roundIds — comparte el mismo Set global que V2 para evitar
+    // duplicados cuando ambos canales WebSocket están activos simultáneamente.
+    // _snSpacemanProcessedRounds se declara más abajo en el scope global (línea ~21929).
+    // Usamos una referencia lazy para asegurarnos de que ya existe.
+    const _getSharedSpacemanRounds = () => window._snSpacemanProcessedRounds || (window._snSpacemanProcessedRounds = new Set());
+    // Alias local para compatibilidad con el código existente
+    const _spacemanProcessedRounds = { 
+      has: k => _getSharedSpacemanRounds().has(k),
+      add: k => _getSharedSpacemanRounds().add(k),
+      get size() { return _getSharedSpacemanRounds().size; },
+      clear: () => _getSharedSpacemanRounds().clear(),
+      [Symbol.iterator]: function*(){ yield* _getSharedSpacemanRounds(); }
+    };
 
     const SPACEMAN_CONFIG = {
       wsUrl: 'wss://dga.pragmaticplaylive.net/ws',
@@ -9264,6 +9279,15 @@
     }
 
     function connectToSpaceman() {
+      // ── DESHABILITADO: conexión directa a dga.pragmaticplaylive.net bloqueada por CORS ──
+      // El predictor usa exclusivamente el proxy Railway (V2 / connectWebSocket).
+      if (!connectToSpaceman._warned) {
+        connectToSpaceman._warned = true;
+        console.warn('⚠️ [Spaceman V1] Conexión directa deshabilitada — usando proxy Railway.');
+        updateSpacemanUI('', '⚠️ Usando proxy Railway para Spaceman');
+      }
+      return;
+      // --- código original deshabilitado ---
       if (spacemanSocket && (spacemanSocket.readyState === WebSocket.OPEN || spacemanSocket.readyState === WebSocket.CONNECTING)) {
         console.log('⚠️ Ya hay una conexión activa');
         return;
@@ -9424,18 +9448,27 @@
         };
 
         spacemanSocket.onclose = function (event) {
-          console.log('🔌 WebSocket CERRADO');
-          console.log('   - Code:', event.code);
-          console.log('   - Reason:', event.reason);
-          console.log('   - WasClean:', event.wasClean);
+          console.log('🔌 WebSocket CERRADO - Code:', event.code, 'Clean:', event.wasClean);
           spacemanIsConnected = false;
 
-          if (!event.wasClean) {
-            console.log('🔄 Intentando reconectar en 3 segundos...');
-            updateSpacemanUI('', '⚠️ Conexión perdida. Reconectando...');
-            setTimeout(connectToSpaceman, 3000);
+          if (!event.wasClean && _spacemanReconnectAttempt < _SPACEMAN_MAX_RECONNECT) {
+            _spacemanReconnectAttempt++;
+            // Backoff exponencial: 3s, 6s, 12s, 24s, 48s
+            var delay = Math.min(48000, 3000 * Math.pow(2, _spacemanReconnectAttempt - 1));
+            console.log('🔄 Reconectando intento ' + _spacemanReconnectAttempt + '/' + _SPACEMAN_MAX_RECONNECT + ' en ' + (delay/1000) + 's...');
+            updateSpacemanUI('', '⚠️ Reconectando (' + _spacemanReconnectAttempt + '/' + _SPACEMAN_MAX_RECONNECT + ')...');
+            if (_spacemanReconnectTimer) clearTimeout(_spacemanReconnectTimer);
+            _spacemanReconnectTimer = setTimeout(function() {
+              _spacemanReconnectTimer = null;
+              connectToSpaceman();
+            }, delay);
+          } else if (_spacemanReconnectAttempt >= _SPACEMAN_MAX_RECONNECT) {
+            console.error('❌ Spaceman V1: máximo de intentos alcanzado. Conexión directa bloqueada (CORS/firewall). Usando solo Railway.');
+            updateSpacemanUI('', '❌ Conexión directa no disponible — usando proxy Railway');
+            _spacemanReconnectAttempt = 0;
           } else {
             updateSpacemanUI('', 'Desconectado');
+            _spacemanReconnectAttempt = 0;
           }
         };
 
@@ -21926,7 +21959,9 @@ const SN_SPACEMAN_CONFIG = {
 };
 
 // Set persistente de roundIds para dedup en V2 — NO expira
-const _snSpacemanProcessedRounds = new Set();
+// Expuesto en window para que V1 (spacemanSocket) comparta el mismo Set y evite duplicados cruzados
+window._snSpacemanProcessedRounds = new Set();
+const _snSpacemanProcessedRounds = window._snSpacemanProcessedRounds;
 let _snSpacemanBootstrapped = false;
 let _snSpacemanLastMultiplier = null;
 let _snSpacemanLastAppliedAt = 0;
@@ -22142,6 +22177,8 @@ let currentGame = 'aviator';
 let currentMode = 'manual';
 let ws = null;
 let wsReconnectTimer = null;
+let wsReconnectAttempt = 0;
+const WS_MAX_RECONNECT = 8; // backoff hasta ~85s
 
 // Initialize game selector
 window.addEventListener('load', () => {
@@ -22256,6 +22293,7 @@ function selectMode(mode) {
 
 // WebSocket Connection (para spaceman y slide — Aviator usa REST polling)
 function connectWebSocket() {
+  wsReconnectAttempt = 0; // al conectar manualmente, reiniciar backoff
   if (currentGame === 'aviator') {
     // Aviator usa REST polling, no WebSocket
     if (!aviatorIsRunning) startAviatorCapture();
@@ -22286,6 +22324,7 @@ function connectWebSocket() {
     ws.onopen = () => {
       updateConnectionStatus('connected');
       addAlert(`✅ Conectado a ${currentGame.toUpperCase()}`, 'success');
+      wsReconnectAttempt = 0; // resetear backoff al conectar exitosamente
 
       // Clear reconnect timer
       if (wsReconnectTimer) {
@@ -22326,10 +22365,20 @@ function connectWebSocket() {
     ws.onclose = () => {
       updateConnectionStatus('disconnected');
       if (!wsReconnectTimer && currentMode === 'auto') {
-        wsReconnectTimer = setTimeout(() => {
-          wsReconnectTimer = null;
-          if (currentMode === 'auto') connectWebSocket();
-        }, 5000);
+        if (wsReconnectAttempt < WS_MAX_RECONNECT) {
+          wsReconnectAttempt++;
+          // Backoff exponencial: 5s, 10s, 20s, 40s, 80s ... máx ~85s
+          var delay = Math.min(85000, 5000 * Math.pow(2, wsReconnectAttempt - 1));
+          console.log('🔄 WS reconectando intento ' + wsReconnectAttempt + '/' + WS_MAX_RECONNECT + ' en ' + Math.round(delay/1000) + 's');
+          wsReconnectTimer = setTimeout(() => {
+            wsReconnectTimer = null;
+            if (currentMode === 'auto') connectWebSocket();
+          }, delay);
+        } else {
+          console.error('❌ WS: máximo de reconexiones alcanzado. Verifica la conexión a internet o Railway.');
+          addAlert('❌ Sin conexión tras ' + WS_MAX_RECONNECT + ' intentos. Reconecta manualmente.', 'info');
+          wsReconnectAttempt = 0;
+        }
       }
     };
 
@@ -22425,10 +22474,10 @@ function handleSpacemanPragmaticMessage(data) {
     if (eventKey) {
       if (_snSpacemanProcessedRounds.has(eventKey)) return;
       _snSpacemanProcessedRounds.add(eventKey);
-      if (_snSpacemanProcessedRounds.size > 100) {
+      if (_snSpacemanProcessedRounds.size > 2000) {
         const arr = [..._snSpacemanProcessedRounds];
         _snSpacemanProcessedRounds.clear();
-        arr.slice(-80).forEach(k => _snSpacemanProcessedRounds.add(k));
+        arr.slice(-1500).forEach(k => _snSpacemanProcessedRounds.add(k));
       }
     } else {
       if (_snSpacemanLastMultiplier === multiplier && (nowTs - _snSpacemanLastAppliedAt) < 60000) return;
@@ -22504,23 +22553,18 @@ function handleWebSocketMessage(data) {
 
   // ── Lote de nuevos eventos ──
   if (data.tipo === 'batch' && Array.isArray(data.eventos)) {
-    // Procesar todos silenciosamente (sin bloqueo de updatePending)
-    // y luego evaluar+dibujar UNA sola vez
-    data.eventos.forEach(ev => {
+    // FIX anti-duplicados: procesar todos los eventos EXCEPTO el último silenciosamente,
+    // y el último con silencioso=false para que addValueFromServer lo evalúe UNA SOLA VEZ.
+    const evs = data.eventos;
+    evs.forEach((ev, idx) => {
       const mult = parseFloat(ev.maxMultiplier);
       const nivel = parseInt(ev.nivel ?? 0);
-      if (mult > 0) addValueFromServer(mult, nivel, true);
-    });
-    // Evaluar el último valor recibido y redibujar
-    if (data.eventos.length > 0) {
-      const ultimo = data.eventos[data.eventos.length - 1];
-      const multUltimo = parseFloat(ultimo.maxMultiplier);
-      if (multUltimo > 0) {
-        evaluateAlertResult(multUltimo);
-        processNewValue(multUltimo);
-        addAlert(`📡 ${multUltimo.toFixed(2)}x | Nivel: ${(parseInt(ultimo.nivel ?? 0) >= 0 ? '+' : '') + parseInt(ultimo.nivel ?? 0)}`, 'success');
-        updatePercentages();
+      if (mult > 0) {
+        // Solo el último evento se procesa con silencioso=false (dispara evaluación)
+        addValueFromServer(mult, nivel, idx < evs.length - 1);
       }
+    });
+    if (evs.length > 0) {
       if (drawRequest) cancelAnimationFrame(drawRequest);
       drawRequest = requestAnimationFrame(() => { draw(); updatePending = false; });
     }
@@ -25344,13 +25388,8 @@ window.updateNivelTable = updateNivelTable;
         if (typeof connectWebSocket === 'function') connectWebSocket();
       }
     } catch(_) {}
-    try {
-      if (typeof spacemanIsConnected !== 'undefined' && !spacemanIsConnected &&
-          typeof spacemanSocket !== 'undefined' &&
-          (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED)) {
-        if (typeof connectToSpaceman === 'function') connectToSpaceman();
-      }
-    } catch(_) {}
+    // [DESHABILITADO] connectToSpaceman V1 bloqueada por CORS — no reintentar desde keepalive
+    // try { if (typeof spacemanIsConnected !== 'undefined' && !spacemanIsConnected ...) connectToSpaceman(); } catch(_) {}
   }
 
   // ── 1. TIMER: IFRAME srcdoc (no requiere blob: URLs) ─────
