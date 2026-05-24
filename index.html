@@ -21931,6 +21931,9 @@ let _snSpacemanBootstrapped = false;
 let _snSpacemanLastMultiplier = null;
 let _snSpacemanLastAppliedAt = 0;
 
+let _v2LastRealtimeValue = null;
+let _v2LastRealtimeTs = 0;
+
 // =====================================================
 // ✅ AVIATOR — REST POLLING (igual que PREDICTOR TATAN V3)
 // =====================================================
@@ -22008,6 +22011,7 @@ const AVIATOR_CONFIG = {
   MAX_ERRORS: 5
 };
 let aviatorIsRunning = false;
+let aviatorPollActive = false;
 let aviatorPollTimer = null;
 let aviatorLastRoundId = null;
 let aviatorRoundCount = 0;
@@ -22035,6 +22039,7 @@ function updateAviatorStatusBar(status, message) {
 
 async function startAviatorCapture() {
   aviatorIsRunning = true;
+  aviatorPollActive = true;
   aviatorConsecutiveErrors = 0;
   updateAviatorStatusBar('connecting', '⏳ Conectando a API Aviator...');
 
@@ -22048,8 +22053,10 @@ async function startAviatorCapture() {
           rounds.forEach(r => { const id = _getAviatorRid(r); if (id) aviatorSeenIds.add(String(id)); });
           const ridLatest = _getAviatorRid(rounds[0]);
           const multsOldToNew = rounds.slice().reverse().map(r => _getAviatorMult(r)).filter(m => !isNaN(m) && m >= 1);
-          // Seed historial en modo auto (igual que addValueFromServer silencioso)
-          multsOldToNew.forEach(mult => addValueFromServer(mult, null, true));
+          // Seed historial solo si Aviator es el juego activo — en background no tocar data[]
+          if (currentGame === 'aviator') {
+            multsOldToNew.forEach(mult => addValueFromServer(mult, null, true));
+          }
           if (ridLatest) aviatorLastRoundId = ridLatest;
           aviatorBootstrapped = multsOldToNew.length > 0;
           aviatorRoundCount = Math.max(aviatorRoundCount, multsOldToNew.length);
@@ -22065,17 +22072,21 @@ async function startAviatorCapture() {
       updateAviatorStatusBar('error', `❌ Error inicial Aviator: ${e.message}`);
     }
   }
+  aviatorPollActive = false;
   aviatorPollLoop();
 }
 
 function stopAviatorCapture() {
   aviatorIsRunning = false;
+  aviatorPollActive = false;
   if (aviatorPollTimer) { clearTimeout(aviatorPollTimer); aviatorPollTimer = null; }
   updateAviatorStatusBar('disconnected', '⏹️ Aviator detenido');
 }
 
 async function aviatorPollLoop() {
   if (!aviatorIsRunning) return;
+  if (aviatorPollActive) return;
+  aviatorPollActive = true;
   const t0 = performance.now();
   try {
     const resp = await _fetchWithTimeout(AVIATOR_CONFIG.API_URL, { headers: AVIATOR_CONFIG.API_HEADERS, cache: 'no-store' });
@@ -22086,16 +22097,25 @@ async function aviatorPollLoop() {
     let rounds = _extractRounds(rawData);
     if (rounds.length === 0) {
       aviatorConsecutiveErrors = 0;
+      aviatorPollActive = false;
       if (aviatorIsRunning) aviatorPollTimer = setTimeout(aviatorPollLoop, AVIATOR_CONFIG.POLL_INTERVAL);
       return;
     }
 
     if (!_aviatorApiLogged && rounds[0]) { console.log('✈️ Aviator API sample:', JSON.stringify(rounds[0])); _aviatorApiLogged = true; }
 
+    // ANTI-DUPLICACION: no procesar rondas nuevas hasta que el bootstrap esté completo
+    if (!aviatorBootstrapped) {
+      aviatorPollActive = false;
+      if (aviatorIsRunning) aviatorPollTimer = setTimeout(aviatorPollLoop, AVIATOR_CONFIG.POLL_INTERVAL);
+      return;
+    }
+
     const newRounds = rounds.slice().reverse().filter(r => {
       const id = String(_getAviatorRid(r));
       if (!id || aviatorSeenIds.has(id)) return false;
       aviatorSeenIds.add(id);
+      if (aviatorSeenIds.size > 2000) { const _arr = [...aviatorSeenIds]; aviatorSeenIds = new Set(_arr.slice(-1500)); }
       return true;
     });
 
@@ -22117,6 +22137,7 @@ async function aviatorPollLoop() {
 
     aviatorConsecutiveErrors = 0;
   } catch (e) {
+    aviatorPollActive = false;
     aviatorConsecutiveErrors++;
     const status = aviatorConsecutiveErrors >= AVIATOR_CONFIG.MAX_ERRORS
       ? `❌ Error Aviator (${aviatorConsecutiveErrors} intentos)`
@@ -22125,6 +22146,7 @@ async function aviatorPollLoop() {
   }
 
   if (aviatorIsRunning) {
+    aviatorPollActive = false;
     const delay = aviatorConsecutiveErrors > 0 ? AVIATOR_CONFIG.RETRY_DELAY : AVIATOR_CONFIG.POLL_INTERVAL;
     aviatorPollTimer = setTimeout(aviatorPollLoop, delay);
   }
@@ -22178,9 +22200,13 @@ function selectGame(game) {
   // Connect to new game (solo en modo auto)
   if (currentMode === 'auto') {
     if (game === 'aviator') {
-      // Reiniciar poll de Aviator enfocado
-      if (!aviatorIsRunning) startAviatorCapture();
-      else updateAviatorStatusBar('connected', '✅ Aviator EN VIVO');
+      // Reiniciar poll de Aviator enfocado — resetear bootstrap para resembrar historial en data[]
+      aviatorBootstrapped = false;
+      aviatorSeenIds = new Set();
+      aviatorPollActive = false;
+      if (aviatorPollTimer) { clearTimeout(aviatorPollTimer); aviatorPollTimer = null; }
+      aviatorIsRunning = false;
+      startAviatorCapture();
     } else {
       connectWebSocket();
       // Mantener Aviator en background
@@ -22259,7 +22285,7 @@ function connectWebSocket() {
     return;
   }
 
-  if (ws && ws.readyState === WebSocket.OPEN) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
   const endpoint = endpoints[currentGame];
   if (!endpoint) {
@@ -22271,6 +22297,8 @@ function connectWebSocket() {
 
   // Resetear estado de dedup Spaceman al reconectar
   if (currentGame === 'spaceman') {
+    data = [];
+    historyData = [];
     _snSpacemanBootstrapped = false;
     _snSpacemanLastMultiplier = null;
     _snSpacemanLastAppliedAt = 0;
@@ -22399,6 +22427,8 @@ function handleSpacemanPragmaticMessage(data) {
     }
 
     // ── 3. Extraer multiplicador ──
+    // ANTI-DUPLICACION: no procesar rondas individuales hasta que el bootstrap esté completo
+    if (!_snSpacemanBootstrapped) return;
     let multiplier = null;
     if (data.gameResult && data.gameResult.length > 0) {
       multiplier = parseFloat(data.gameResult[0].result ?? data.gameResult[0].multiplier ?? data.gameResult[0].coefficient);
@@ -22420,10 +22450,10 @@ function handleSpacemanPragmaticMessage(data) {
     if (eventKey) {
       if (_snSpacemanProcessedRounds.has(eventKey)) return;
       _snSpacemanProcessedRounds.add(eventKey);
-      if (_snSpacemanProcessedRounds.size > 100) {
+      if (_snSpacemanProcessedRounds.size > 2000) {
         const arr = [..._snSpacemanProcessedRounds];
         _snSpacemanProcessedRounds.clear();
-        arr.slice(-80).forEach(k => _snSpacemanProcessedRounds.add(k));
+        arr.slice(-1500).forEach(k => _snSpacemanProcessedRounds.add(k));
       }
     } else {
       if (_snSpacemanLastMultiplier === multiplier && (nowTs - _snSpacemanLastAppliedAt) < 60000) return;
@@ -22570,6 +22600,13 @@ function addValueFromServer(value, nivelServidor = null, silencioso = false) {
   }
 
   const timestamp = new Date();
+  // Dedup rondas en tiempo real: bloquear mismo valor si llegó hace < 5s
+  if (!silencioso) {
+    const _now = timestamp.getTime();
+    if (_v2LastRealtimeValue === value && (_now - _v2LastRealtimeTs) < 5000) return;
+    _v2LastRealtimeValue = value;
+    _v2LastRealtimeTs = _now;
+  }
 
   // Guardar nivel del servidor junto al dato — SIEMPRE, sin bloqueo por updatePending
   const entry = { timestamp, value, range: rangeKey, nivel: nivelServidor };
@@ -22605,6 +22642,8 @@ function cleanAllData() {
   const count = data.length;
   data = [];
   historyData = [];
+  _v2LastRealtimeValue = null;
+  _v2LastRealtimeTs = 0;
 
   document.getElementById('valuesCount').textContent = 'Valores: 0';
   document.getElementById('totalValues').textContent = '0';
@@ -25327,7 +25366,8 @@ window.updateNivelTable = updateNivelTable;
   function onTick() {
     try {
       if (typeof aviatorIsRunning !== 'undefined' && aviatorIsRunning &&
-          (typeof aviatorPollTimer === 'undefined' || !aviatorPollTimer)) {
+          (typeof aviatorPollTimer === 'undefined' || !aviatorPollTimer) &&
+          (typeof aviatorPollActive === 'undefined' || !aviatorPollActive)) {
         if (typeof aviatorPollLoop === 'function') aviatorPollLoop();
       }
     } catch(_) {}
@@ -25415,7 +25455,8 @@ window.updateNivelTable = updateNivelTable;
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState !== 'visible') return;
     try {
-      if (typeof aviatorIsRunning !== 'undefined' && aviatorIsRunning && !aviatorPollTimer) {
+      if (typeof aviatorIsRunning !== 'undefined' && aviatorIsRunning && !aviatorPollTimer &&
+          (typeof aviatorPollActive === 'undefined' || !aviatorPollActive)) {
         if (typeof aviatorPollLoop === 'function') aviatorPollLoop();
       }
     } catch(_) {}
