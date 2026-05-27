@@ -9153,7 +9153,7 @@
         }
         // Reactivar WebSocket de Spaceman si se cerró mientras estaba en fondo
         try {
-          if (spacemanIsConnected === false && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED)) {
+          if (!(document.getElementById('spaceman-nuevo')&&document.getElementById('spaceman-nuevo').classList.contains('active')) && spacemanIsConnected === false && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED)) {
             connectToSpaceman();
           }
         } catch(_) {}
@@ -9433,7 +9433,7 @@
           if (!event.wasClean) {
             console.log('🔄 Intentando reconectar en 3 segundos...');
             updateSpacemanUI('', '⚠️ Conexión perdida. Reconectando...');
-            setTimeout(connectToSpaceman, 3000);
+            if (!(document.getElementById('spaceman-nuevo')&&document.getElementById('spaceman-nuevo').classList.contains('active'))) setTimeout(connectToSpaceman, 3000);
           } else {
             updateSpacemanUI('', 'Desconectado');
           }
@@ -9509,7 +9509,7 @@
         }
 
         try {
-          const canConnectSpaceman = !spacemanIsConnected && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED || spacemanSocket.readyState === WebSocket.CLOSING);
+          const canConnectSpaceman = !(document.getElementById('spaceman-nuevo')&&document.getElementById('spaceman-nuevo').classList.contains('active')) && !spacemanIsConnected && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED || spacemanSocket.readyState === WebSocket.CLOSING);
           if (canConnectSpaceman) {
             connectToSpaceman();
           }
@@ -9544,7 +9544,7 @@
           }
           updateRealtimePanels('aviator');
           if (!aviatorIsRunning) startAviatorCapture();
-          if (!spacemanIsConnected && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED || spacemanSocket.readyState === WebSocket.CLOSING)) connectToSpaceman();
+          if (!(document.getElementById('spaceman-nuevo')&&document.getElementById('spaceman-nuevo').classList.contains('active')) && !spacemanIsConnected && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED || spacemanSocket.readyState === WebSocket.CLOSING)) connectToSpaceman();
           break;
         case 'spaceman':
           if (gameSpacemanBtn) gameSpacemanBtn.classList.add('active');
@@ -9554,7 +9554,7 @@
           }
           updateRealtimePanels('spaceman');
           if (!aviatorIsRunning) startAviatorCapture();
-          if (!spacemanIsConnected && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED || spacemanSocket.readyState === WebSocket.CLOSING)) connectToSpaceman();
+          if (!(document.getElementById('spaceman-nuevo')&&document.getElementById('spaceman-nuevo').classList.contains('active')) && !spacemanIsConnected && (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED || spacemanSocket.readyState === WebSocket.CLOSING)) connectToSpaceman();
           break;
       }
 
@@ -21937,17 +21937,17 @@ let _v2LastRealtimeTs = 0;
 // =====================================================
 // ✅ AVIATOR — REST POLLING (igual que PREDICTOR TATAN V3)
 // =====================================================
-const AVIATOR_CASINOS = {
+const _V2_AVIATOR_CASINOS = {
   '1': { label: 'Rushbet / Betplay', roundsId: 1 },
   '2': { label: '1win', roundsId: 2 }
 };
-const AVIATOR_STORAGE_KEY = 'aviator_casino_id_spaceman';
+const _V2_AVIATOR_STORAGE_KEY = 'aviator_casino_id_spaceman';
 
-function buildAviatorApiUrl(roundsId) {
+function _v2BuildAviatorApiUrl(roundsId) {
   return `https://marvelous-trust-production.up.railway.app/api/aviator/rounds/${roundsId}?limit=1000`;
 }
 
-function _getAviatorMult(r) {
+function _v2GetAviatorMult(r) {
   const raw = r.maxMultiplier !== undefined ? r.maxMultiplier
             : r.max_multiplier !== undefined ? r.max_multiplier
             : r.multiplier !== undefined ? r.multiplier
@@ -21960,7 +21960,7 @@ function _getAviatorMult(r) {
   return parseFloat(raw) || 0;
 }
 
-function _getAviatorRid(r) {
+function _v2GetAviatorRid(r) {
   return String(r.round_id !== undefined ? r.round_id
               : r.roundId !== undefined ? r.roundId
               : r.id !== undefined ? r.id
@@ -21968,7 +21968,7 @@ function _getAviatorRid(r) {
               : r.game_id !== undefined ? r.game_id : '');
 }
 
-function _extractRounds(data) {
+function _v2ExtractRounds(data) {
   let arr = [];
   if (Array.isArray(data)) {
     arr = data;
@@ -21993,7 +21993,7 @@ function _extractRounds(data) {
   return arr;
 }
 
-async function _fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+async function _v2FetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Request timeout after ' + timeoutMs + 'ms')), timeoutMs)
   );
@@ -22002,64 +22002,64 @@ async function _fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   return Promise.race([fetch(url, fetchOpts), timeoutPromise]);
 }
 
-let aviatorSeenIds = new Set();
-const AVIATOR_CONFIG = {
-  API_URL: buildAviatorApiUrl(AVIATOR_CASINOS['1'].roundsId),
+let _v2AvSeenIds = new Set();
+const _V2_AVIATOR_CONFIG = {
+  API_URL: _v2BuildAviatorApiUrl(_V2_AVIATOR_CASINOS['1'].roundsId),
   API_HEADERS: {},
   POLL_INTERVAL: 1500,
   RETRY_DELAY: 4000,
   MAX_ERRORS: 5
 };
-let aviatorIsRunning = false;
-let aviatorPollActive = false;
-let aviatorPollTimer = null;
-let aviatorLastRoundId = null;
-let aviatorRoundCount = 0;
-let aviatorConsecutiveErrors = 0;
-let aviatorBootstrapped = false;
-let _aviatorApiLogged = false;
+let _v2AvIsRunning = false;
+let _v2AvPollActive = false;
+let _v2AvPollTimer = null;
+let _v2AvLastRoundId = null;
+let _v2AvRoundCount = 0;
+let _v2AvConsecErrors = 0;
+let _v2AvBootstrapped = false;
+let _v2AvApiLogged = false;
 
-function setAviatorCasino(casinoId) {
+function _v2SetAviatorCasino(casinoId) {
   const normalized = String(casinoId || '1');
-  const cfg = AVIATOR_CASINOS[normalized] ? normalized : '1';
-  AVIATOR_CONFIG.API_URL = buildAviatorApiUrl(AVIATOR_CASINOS[cfg].roundsId);
-  try { localStorage.setItem(AVIATOR_STORAGE_KEY, cfg); } catch (_) {}
-  aviatorBootstrapped = false;
-  aviatorLastRoundId = null;
-  aviatorSeenIds = new Set();
-  if (aviatorIsRunning) { stopAviatorCapture(); startAviatorCapture(); }
+  const cfg = _V2_AVIATOR_CASINOS[normalized] ? normalized : '1';
+  _V2_AVIATOR_CONFIG.API_URL = _v2BuildAviatorApiUrl(_V2_AVIATOR_CASINOS[cfg].roundsId);
+  try { localStorage.setItem(_V2_AVIATOR_STORAGE_KEY, cfg); } catch (_) {}
+  _v2AvBootstrapped = false;
+  _v2AvLastRoundId = null;
+  _v2AvSeenIds = new Set();
+  if (_v2AvIsRunning) { _v2StopAviatorCapture(); _v2StartAviatorCapture(); }
 }
 
-function updateAviatorStatusBar(status, message) {
+function _v2UpdateAviatorStatusBar(status, message) {
   if (currentGame !== 'aviator') return;
   updateConnectionStatus(status === 'connected' ? 'connected' : status === 'connecting' ? 'connecting' : 'error');
   const statusText = document.getElementById('wsStatusText');
   if (statusText) statusText.textContent = message;
 }
 
-async function startAviatorCapture() {
-  aviatorIsRunning = true;
-  aviatorPollActive = true;
-  aviatorConsecutiveErrors = 0;
-  updateAviatorStatusBar('connecting', '⏳ Conectando a API Aviator...');
+async function _v2StartAviatorCapture() {
+  _v2AvIsRunning = true;
+  _v2AvPollActive = true;
+  _v2AvConsecErrors = 0;
+  _v2UpdateAviatorStatusBar('connecting', '⏳ Conectando a API Aviator...');
 
-  if (!aviatorBootstrapped) {
+  if (!_v2AvBootstrapped) {
     try {
-      const resp = await _fetchWithTimeout(AVIATOR_CONFIG.API_URL, { headers: AVIATOR_CONFIG.API_HEADERS, cache: 'no-store' });
+      const resp = await _v2FetchWithTimeout(_V2_AVIATOR_CONFIG.API_URL, { headers: _V2_AVIATOR_CONFIG.API_HEADERS, cache: 'no-store' });
       if (resp.ok) {
         const rawData = await resp.json();
-        const rounds = _extractRounds(rawData);
+        const rounds = _v2ExtractRounds(rawData);
         if (rounds && rounds.length) {
-          rounds.forEach(r => { const id = _getAviatorRid(r); if (id) aviatorSeenIds.add(String(id)); });
-          const ridLatest = _getAviatorRid(rounds[0]);
-          const multsOldToNew = rounds.slice().reverse().map(r => _getAviatorMult(r)).filter(m => !isNaN(m) && m >= 1);
+          rounds.forEach(r => { const id = _v2GetAviatorRid(r); if (id) _v2AvSeenIds.add(String(id)); });
+          const ridLatest = _v2GetAviatorRid(rounds[0]);
+          const multsOldToNew = rounds.slice().reverse().map(r => _v2GetAviatorMult(r)).filter(m => !isNaN(m) && m >= 1);
           // Seed historial solo si Aviator es el juego activo — en background no tocar data[]
           if (currentGame === 'aviator') {
             multsOldToNew.forEach(mult => addValueFromServer(mult, null, true));
           }
-          if (ridLatest) aviatorLastRoundId = ridLatest;
-          aviatorBootstrapped = multsOldToNew.length > 0;
-          aviatorRoundCount = Math.max(aviatorRoundCount, multsOldToNew.length);
+          if (ridLatest) _v2AvLastRoundId = ridLatest;
+          _v2AvBootstrapped = multsOldToNew.length > 0;
+          _v2AvRoundCount = Math.max(_v2AvRoundCount, multsOldToNew.length);
           // Redibujar una sola vez al final
           if (drawRequest) cancelAnimationFrame(drawRequest);
           updatePending = false;
@@ -22069,86 +22069,86 @@ async function startAviatorCapture() {
       }
     } catch (e) {
       console.error('❌ Error bootstrap Aviator:', e);
-      updateAviatorStatusBar('error', `❌ Error inicial Aviator: ${e.message}`);
+      _v2UpdateAviatorStatusBar('error', `❌ Error inicial Aviator: ${e.message}`);
     }
   }
-  aviatorPollActive = false;
-  aviatorPollLoop();
+  _v2AvPollActive = false;
+  _v2AvPollLoop();
 }
 
-function stopAviatorCapture() {
-  aviatorIsRunning = false;
-  aviatorPollActive = false;
-  if (aviatorPollTimer) { clearTimeout(aviatorPollTimer); aviatorPollTimer = null; }
-  updateAviatorStatusBar('disconnected', '⏹️ Aviator detenido');
+function _v2StopAviatorCapture() {
+  _v2AvIsRunning = false;
+  _v2AvPollActive = false;
+  if (_v2AvPollTimer) { clearTimeout(_v2AvPollTimer); _v2AvPollTimer = null; }
+  _v2UpdateAviatorStatusBar('disconnected', '⏹️ Aviator detenido');
 }
 
-async function aviatorPollLoop() {
-  if (!aviatorIsRunning) return;
-  if (aviatorPollActive) return;
-  aviatorPollActive = true;
+async function _v2AvPollLoop() {
+  if (!_v2AvIsRunning) return;
+  if (_v2AvPollActive) return;
+  _v2AvPollActive = true;
   const t0 = performance.now();
   try {
-    const resp = await _fetchWithTimeout(AVIATOR_CONFIG.API_URL, { headers: AVIATOR_CONFIG.API_HEADERS, cache: 'no-store' });
+    const resp = await _v2FetchWithTimeout(_V2_AVIATOR_CONFIG.API_URL, { headers: _V2_AVIATOR_CONFIG.API_HEADERS, cache: 'no-store' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const rawData = await resp.json();
     const ping = Math.round(performance.now() - t0);
 
-    let rounds = _extractRounds(rawData);
+    let rounds = _v2ExtractRounds(rawData);
     if (rounds.length === 0) {
-      aviatorConsecutiveErrors = 0;
-      aviatorPollActive = false;
-      if (aviatorIsRunning) aviatorPollTimer = setTimeout(aviatorPollLoop, AVIATOR_CONFIG.POLL_INTERVAL);
+      _v2AvConsecErrors = 0;
+      _v2AvPollActive = false;
+      if (_v2AvIsRunning) _v2AvPollTimer = setTimeout(_v2AvPollLoop, _V2_AVIATOR_CONFIG.POLL_INTERVAL);
       return;
     }
 
-    if (!_aviatorApiLogged && rounds[0]) { console.log('✈️ Aviator API sample:', JSON.stringify(rounds[0])); _aviatorApiLogged = true; }
+    if (!_v2AvApiLogged && rounds[0]) { console.log('✈️ Aviator API sample:', JSON.stringify(rounds[0])); _v2AvApiLogged = true; }
 
     // ANTI-DUPLICACION: no procesar rondas nuevas hasta que el bootstrap esté completo
-    if (!aviatorBootstrapped) {
-      aviatorPollActive = false;
-      if (aviatorIsRunning) aviatorPollTimer = setTimeout(aviatorPollLoop, AVIATOR_CONFIG.POLL_INTERVAL);
+    if (!_v2AvBootstrapped) {
+      _v2AvPollActive = false;
+      if (_v2AvIsRunning) _v2AvPollTimer = setTimeout(_v2AvPollLoop, _V2_AVIATOR_CONFIG.POLL_INTERVAL);
       return;
     }
 
     const newRounds = rounds.slice().reverse().filter(r => {
-      const id = String(_getAviatorRid(r));
-      if (!id || aviatorSeenIds.has(id)) return false;
-      aviatorSeenIds.add(id);
-      if (aviatorSeenIds.size > 2000) { const _arr = [...aviatorSeenIds]; aviatorSeenIds = new Set(_arr.slice(-1500)); }
+      const id = String(_v2GetAviatorRid(r));
+      if (!id || _v2AvSeenIds.has(id)) return false;
+      _v2AvSeenIds.add(id);
+      if (_v2AvSeenIds.size > 2000) { const _arr = [..._v2AvSeenIds]; _v2AvSeenIds = new Set(_arr.slice(-1500)); }
       return true;
     });
 
     for (const roundObj of newRounds) {
-      const mult = _getAviatorMult(roundObj);
+      const mult = _v2GetAviatorMult(roundObj);
       if (!mult || mult < 1) continue;
-      aviatorRoundCount++;
+      _v2AvRoundCount++;
       if (currentGame === 'aviator') {
         addValueFromServer(mult, null);
       }
     }
 
     if (newRounds.length > 0 && currentGame === 'aviator') {
-      const lastMult = _getAviatorMult(newRounds[newRounds.length - 1]);
-      updateAviatorStatusBar('connected', `✅ Aviator EN VIVO — ${lastMult.toFixed(2)}x | ping ${ping}ms`);
+      const lastMult = _v2GetAviatorMult(newRounds[newRounds.length - 1]);
+      _v2UpdateAviatorStatusBar('connected', `✅ Aviator EN VIVO — ${lastMult.toFixed(2)}x | ping ${ping}ms`);
     } else if (currentGame === 'aviator') {
-      updateAviatorStatusBar('connected', `✅ Aviator EN VIVO — Sin rondas nuevas | ping ${ping}ms`);
+      _v2UpdateAviatorStatusBar('connected', `✅ Aviator EN VIVO — Sin rondas nuevas | ping ${ping}ms`);
     }
 
-    aviatorConsecutiveErrors = 0;
+    _v2AvConsecErrors = 0;
   } catch (e) {
-    aviatorPollActive = false;
-    aviatorConsecutiveErrors++;
-    const status = aviatorConsecutiveErrors >= AVIATOR_CONFIG.MAX_ERRORS
-      ? `❌ Error Aviator (${aviatorConsecutiveErrors} intentos)`
-      : `⚠️ Aviator reintentando... (${aviatorConsecutiveErrors}/${AVIATOR_CONFIG.MAX_ERRORS})`;
-    if (currentGame === 'aviator') updateAviatorStatusBar('error', status);
+    _v2AvPollActive = false;
+    _v2AvConsecErrors++;
+    const status = _v2AvConsecErrors >= _V2_AVIATOR_CONFIG.MAX_ERRORS
+      ? `❌ Error Aviator (${_v2AvConsecErrors} intentos)`
+      : `⚠️ Aviator reintentando... (${_v2AvConsecErrors}/${_V2_AVIATOR_CONFIG.MAX_ERRORS})`;
+    if (currentGame === 'aviator') _v2UpdateAviatorStatusBar('error', status);
   }
 
-  if (aviatorIsRunning) {
-    aviatorPollActive = false;
-    const delay = aviatorConsecutiveErrors > 0 ? AVIATOR_CONFIG.RETRY_DELAY : AVIATOR_CONFIG.POLL_INTERVAL;
-    aviatorPollTimer = setTimeout(aviatorPollLoop, delay);
+  if (_v2AvIsRunning) {
+    _v2AvPollActive = false;
+    const delay = _v2AvConsecErrors > 0 ? _V2_AVIATOR_CONFIG.RETRY_DELAY : _V2_AVIATOR_CONFIG.POLL_INTERVAL;
+    _v2AvPollTimer = setTimeout(_v2AvPollLoop, delay);
   }
 }
 
@@ -22170,8 +22170,8 @@ window.addEventListener('load', () => {
   if (grid) grid.style.display = 'grid';
   // Cargar casino guardado de Aviator
   try {
-    const saved = localStorage.getItem(AVIATOR_STORAGE_KEY);
-    if (saved && AVIATOR_CASINOS[saved]) setAviatorCasino(saved);
+    const saved = localStorage.getItem(_V2_AVIATOR_STORAGE_KEY);
+    if (saved && _V2_AVIATOR_CASINOS[saved]) _v2SetAviatorCasino(saved);
   } catch (_) {}
 });
 
@@ -22201,16 +22201,16 @@ function selectGame(game) {
   if (currentMode === 'auto') {
     if (game === 'aviator') {
       // Reiniciar poll de Aviator enfocado — resetear bootstrap para resembrar historial en data[]
-      aviatorBootstrapped = false;
-      aviatorSeenIds = new Set();
-      aviatorPollActive = false;
-      if (aviatorPollTimer) { clearTimeout(aviatorPollTimer); aviatorPollTimer = null; }
-      aviatorIsRunning = false;
-      startAviatorCapture();
+      _v2AvBootstrapped = false;
+      _v2AvSeenIds = new Set();
+      _v2AvPollActive = false;
+      if (_v2AvPollTimer) { clearTimeout(_v2AvPollTimer); _v2AvPollTimer = null; }
+      _v2AvIsRunning = false;
+      _v2StartAviatorCapture();
     } else {
       connectWebSocket();
       // Mantener Aviator en background
-      if (!aviatorIsRunning) startAviatorCapture();
+      if (!_v2AvIsRunning) _v2StartAviatorCapture();
     }
   } else {
     updateConnectionStatus('disconnected');
@@ -22260,12 +22260,12 @@ function selectMode(mode) {
     cleanAllData();
     if (currentGame === 'aviator') {
       // Solo REST poll de Aviator
-      if (!aviatorIsRunning) startAviatorCapture();
-      else updateAviatorStatusBar('connected', '✅ Aviator EN VIVO');
+      if (!_v2AvIsRunning) _v2StartAviatorCapture();
+      else _v2UpdateAviatorStatusBar('connected', '✅ Aviator EN VIVO');
     } else {
       // WebSocket para spaceman/slide + Aviator en background
       connectWebSocket();
-      if (!aviatorIsRunning) startAviatorCapture();
+      if (!_v2AvIsRunning) _v2StartAviatorCapture();
     }
   } else {
     cleanAllData();
@@ -22281,7 +22281,7 @@ function selectMode(mode) {
 function connectWebSocket() {
   if (currentGame === 'aviator') {
     // Aviator usa REST polling, no WebSocket
-    if (!aviatorIsRunning) startAviatorCapture();
+    if (!_v2AvIsRunning) _v2StartAviatorCapture();
     return;
   }
 
@@ -22751,8 +22751,8 @@ window.updateNivelTable = updateNivelTable;
 
   // Cargar casino guardado
   try {
-    const saved = localStorage.getItem(AVIATOR_STORAGE_KEY);
-    if (saved && AVIATOR_CASINOS[saved]) sel.value = saved;
+    const saved = localStorage.getItem(_V2_AVIATOR_STORAGE_KEY);
+    if (saved && _V2_AVIATOR_CASINOS[saved]) sel.value = saved;
   } catch (_) {}
 
   // Mostrar/ocultar selector según juego activo
@@ -22762,8 +22762,8 @@ window.updateNivelTable = updateNivelTable;
 
   // Cambio de casino
   sel.addEventListener('change', (e) => {
-    setAviatorCasino(e.target.value);
-    addAlert(`✈️ Casino Aviator: ${AVIATOR_CASINOS[e.target.value]?.label || e.target.value}`, 'success');
+    _v2SetAviatorCasino(e.target.value);
+    addAlert(`✈️ Casino Aviator: ${_V2_AVIATOR_CASINOS[e.target.value]?.label || e.target.value}`, 'success');
   });
 
   // Estado inicial
@@ -25365,10 +25365,10 @@ window.updateNivelTable = updateNivelTable;
   // ── FUNCIÓN CENTRAL DE HEARTBEAT ─────────────────────────
   function onTick() {
     try {
-      if (typeof aviatorIsRunning !== 'undefined' && aviatorIsRunning &&
-          (typeof aviatorPollTimer === 'undefined' || !aviatorPollTimer) &&
-          (typeof aviatorPollActive === 'undefined' || !aviatorPollActive)) {
-        if (typeof aviatorPollLoop === 'function') aviatorPollLoop();
+      if (typeof _v2AvIsRunning !== 'undefined' && _v2AvIsRunning &&
+          (typeof _v2AvPollTimer === 'undefined' || !_v2AvPollTimer) &&
+          (typeof _v2AvPollActive === 'undefined' || !_v2AvPollActive)) {
+        if (typeof _v2AvPollLoop === 'function') _v2AvPollLoop();
       }
     } catch(_) {}
     try {
@@ -25380,7 +25380,8 @@ window.updateNivelTable = updateNivelTable;
       }
     } catch(_) {}
     try {
-      if (typeof spacemanIsConnected !== 'undefined' && !spacemanIsConnected &&
+      if (!(document.getElementById('spaceman-nuevo')&&document.getElementById('spaceman-nuevo').classList.contains('active')) &&
+          typeof spacemanIsConnected !== 'undefined' && !spacemanIsConnected &&
           typeof spacemanSocket !== 'undefined' &&
           (!spacemanSocket || spacemanSocket.readyState === WebSocket.CLOSED)) {
         if (typeof connectToSpaceman === 'function') connectToSpaceman();
@@ -25455,9 +25456,9 @@ window.updateNivelTable = updateNivelTable;
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState !== 'visible') return;
     try {
-      if (typeof aviatorIsRunning !== 'undefined' && aviatorIsRunning && !aviatorPollTimer &&
-          (typeof aviatorPollActive === 'undefined' || !aviatorPollActive)) {
-        if (typeof aviatorPollLoop === 'function') aviatorPollLoop();
+      if (typeof _v2AvIsRunning !== 'undefined' && _v2AvIsRunning && !_v2AvPollTimer &&
+          (typeof _v2AvPollActive === 'undefined' || !_v2AvPollActive)) {
+        if (typeof _v2AvPollLoop === 'function') _v2AvPollLoop();
       }
     } catch(_) {}
     try {
